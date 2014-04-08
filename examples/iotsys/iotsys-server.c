@@ -101,6 +101,9 @@
 #define BUTTON_BUFF_MAX     6     // true\0 false\0
 #define ACC_MSG_MAX_SIZE    140    // more than enough right now
 #define ACC_BUFF_MAX        11    // freefall\0 activity\0 inactivity\0
+#define BATTERY_MSG_MAX_SIZE    140   // more than enough right now
+#define BATTERY_BUFF_MAX        4     // 0\0 ... 100\0
+
 
 // Group communication definition
 #define MAX_GC_HANDLERS 2
@@ -161,6 +164,11 @@ int led_red = 0;
 int led_blue = 0;
 int led_green = 0;
 #endif
+
+#if RES_BATTERY
+char batterystring[BATTERY_BUFF_MAX];
+#endif
+
 
 /******************************************************************************/
 /* helper functions ***********************************************************/
@@ -394,9 +402,14 @@ uint8_t create_response_datapoint_temperature(char *buffer,	int asChild) {
 		msgp1 =
 				"<real href=\"temp/value\" units=\"obix:units/celsius\" val=\"";
 		size_msgp1 = 56;
+		msgp2 = "\"/>";
+		size_msgp2 = 3;
+
 	} else {
 		msgp1 = "<real href=\"value\" units=\"obix:units/celsius\" val=\"";
 		size_msgp1 = 51;
+		msgp2 = "\"/>\0";
+		size_msgp2 = 4;
 	}
 
 	msgp2 = "\"/>\0";
@@ -407,11 +420,11 @@ uint8_t create_response_datapoint_temperature(char *buffer,	int asChild) {
 		return 0;
 	}
 
-	size_msg = size_msgp1 + size_msgp2 + size_temp + 1;
+	size_msg = size_msgp1 + size_msgp2 + size_temp;
 
 	memcpy(buffer, msgp1, size_msgp1);
 	memcpy(buffer + size_msgp1, tempstring, size_temp);
-	memcpy(buffer + size_msgp1 + size_temp, msgp2, size_msgp2 + 1);
+	memcpy(buffer + size_msgp1 + size_temp, msgp2, size_msgp2);
 
 	return size_msg;
 }
@@ -431,9 +444,9 @@ uint8_t create_response_object_temperature(char *buffer) {
 	// creates real data point and copies content to message buffer
 	size_datapoint = create_response_datapoint_temperature(buffer + size_msgp1, 1);
 
-	memcpy(buffer + size_msgp1 + size_datapoint, msgp2, size_msgp2 + 1);
+	memcpy(buffer + size_msgp1 + size_datapoint, msgp2, size_msgp2);
 
-	size_msg = size_msgp1 + size_msgp2 + size_datapoint + 1;
+	size_msg = size_msgp1 + size_msgp2 + size_datapoint;
 
 	return size_msg;
 }
@@ -582,19 +595,26 @@ uint8_t create_response_datapoint_button(char *buffer, int asChild) {
 
 	msgp1 = "<bool val=\"";
 	size_msgp1 = 11;
-	msgp2 = "\"/>\0";
-	size_msgp2 = 4;
+
+	if(asChild){
+		msgp2 = "\"/>";
+		size_msgp2 = 3;
+	}
+	else{
+		msgp2 = "\"/>\0";
+		size_msgp2 = 4;
+	}
 
 	if ((size_button = button_to_default_buff()) < 0) {
 		PRINTF("Error preparing button string!\n");
 		return 0;
 	}
 
-	size_msg = size_msgp1 + size_msgp2 + size_button + 1;
+	size_msg = size_msgp1 + size_msgp2 + size_button;
 
 	memcpy(buffer, msgp1, size_msgp1);
 	memcpy(buffer + size_msgp1, buttonstring, size_button);
-	memcpy(buffer + size_msgp1 + size_button, msgp2, size_msgp2 + 1);
+	memcpy(buffer + size_msgp1 + size_button, msgp2, size_msgp2);
 
 	return size_msg;
 }
@@ -614,9 +634,9 @@ uint8_t create_response_object_button(char *buffer) {
 	// creates bool data point and copies content to message buffer
 	size_datapoint = create_response_datapoint_button(buffer + size_msgp1, 1);
 
-	memcpy(buffer + size_msgp1 + size_datapoint, msgp2, size_msgp2 + 1);
+	memcpy(buffer + size_msgp1 + size_datapoint, msgp2, size_msgp2);
 
-	size_msg = size_msgp1 + size_msgp2 + size_datapoint + 1;
+	size_msg = size_msgp1 + size_msgp2 + size_datapoint;
 
 	return size_msg;
 }
@@ -810,24 +830,25 @@ uint8_t create_response_datapoint_acc(char *buffer, int asChild) {
 	if (asChild) {
 		msgp1 = "<bool href=\"acc/active\" val=\"";
 		size_msgp1 = 29;
+		msgp2 = "\"/>";
+		size_msgp2 = 3;
 	} else {
 		msgp1 = "<bool href=\"active\" val=\"";
 		size_msgp1 = 25;
+		msgp2 = "\"/>\0";
+		size_msgp2 = 4;
 	}
-	msgp2 = "\"/>\0";
-	size_msgp2 = 4;
-
 
 	if ((size_acc = acc_to_default_buff()) < 0) {
 		PRINTF("Error preparing acc string!\n");
 		return 0;
 	}
 
-	size_msg = size_msgp1 + size_msgp2 + size_acc + 1;
+	size_msg = size_msgp1 + size_msgp2 + size_acc;
 
 	memcpy(buffer, msgp1, size_msgp1);
 	memcpy(buffer + size_msgp1, accstring, size_acc);
-	memcpy(buffer + size_msgp1 + size_acc, msgp2, size_msgp2 + 1);
+	memcpy(buffer + size_msgp1 + size_acc, msgp2, size_msgp2);
 
 	return size_msg;
 }
@@ -847,9 +868,9 @@ uint8_t create_response_object_acc(char *buffer) {
 	// creates data point and copies content to message buffer
 	size_datapoint = create_response_datapoint_acc(buffer + size_msgp1, 1);
 
-	memcpy(buffer + size_msgp1 + size_datapoint, msgp2, size_msgp2 + 1);
+	memcpy(buffer + size_msgp1 + size_datapoint, msgp2, size_msgp2);
 
-	size_msg = size_msgp1 + size_msgp2 + size_datapoint + 1;
+	size_msg = size_msgp1 + size_msgp2 + size_datapoint;
 
 	return size_msg;
 }
@@ -1010,8 +1031,14 @@ uint8_t create_response_datapoint_led(char *buffer,
 	}
 	msgp2 = "\" val=\"";
 	size_msgp2 = 7;
-	msgp3 = "\"/>\0";
-	size_msgp3 = 4;
+	if(asChild) {
+		msgp3 = "\"/>";
+		size_msgp3 = 3;
+	}
+	else{
+		msgp3 = "\"/>\0";
+		size_msgp3 = 4;
+	}
 
 	memcpy(buffer, msgp1, size_msgp1);
 
