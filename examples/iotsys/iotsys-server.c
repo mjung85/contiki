@@ -43,8 +43,8 @@
 
 #include "erbium.h"
 
-#define RES_TEMP 1
-#define RES_ACC 0
+#define RES_TEMP 0
+#define RES_ACC 1
 #define RES_BUTTON 0
 #define RES_LEDS 0
 
@@ -867,7 +867,7 @@ void button_value_event_handler(resource_t *r) {
 #endif //RES_BUTTON
 
 #if RES_ACC
-int acc_to_buff(char* buffer) {
+/*int acc_to_buff(char* buffer) {
 	if (acc == ACC_INACTIVITY) {
 		return snprintf(buffer, ACC_BUFF_MAX, "inactivity");
 	} else if (acc == ACC_ACTIVITY) {
@@ -878,9 +878,86 @@ int acc_to_buff(char* buffer) {
 
 int acc_to_default_buff() {
 	return acc_to_buff(accstring);
+}*/
+
+/* Accs */
+uint8_t create_response_datapoint_acc(char *buffer,
+		int asChild, int field) {
+	int size_msgp1, size_msgp2, size_msgp3, size_field;
+	const char *msgp1, *msgp2, *msgp3, *msgp_active, *msgp_freefall, *msgp_green;
+	char *msgp_field; // will point to active, freefall
+	int value = 0; // on or off, depending on state
+	const char *msg_true;
+	const char *msg_false;
+	char *msgp_value;
+	int size_msgp_value = 0;
+
+	msg_true = "true";
+	msg_false = "false";
+
+	msgp_active = "active";
+	msgp_freefall = "freefall";
+
+	uint8_t size_msg;
+
+	PRINTF("Creating response datapoint acc asChild: %d field: %d\n", asChild, field);
+
+	if (asChild) {
+		msgp1 =	"<bool href=\"acc/";
+		size_msgp1 = 17;
+
+	} else {
+		msgp1 = "<bool href=\"";
+		size_msgp1 = 12;
+	}
+	msgp2 = "\" val=\"";
+	size_msgp2 = 7;
+	if(asChild) {
+		msgp3 = "\"/>";
+		size_msgp3 = 3;
+	}
+	else{
+		msgp3 = "\"/>\0";
+		size_msgp3 = 4;
+	}
+
+	memcpy(buffer, msgp1, size_msgp1);
+
+	if(field == 0){ // active
+		msgp_field = msgp_active;
+		size_field = 6;
+		if(acc == ACC_ACTIVITY){
+			value = 1;
+		}
+	} else if(field == 1){
+		msgp_field = msgp_freefall;
+		size_field = 8;
+		if(acc == ACC_FREEFALL){
+		  value = 1;
+		}
+	}
+
+	if(value == 1){
+		msgp_value = msg_true;
+		size_msgp_value = 4;
+	}
+	else{
+		msgp_value = msg_false;
+		size_msgp_value = 5;
+	}
+	memcpy(buffer + size_msgp1, msgp_field, size_field);
+	memcpy(buffer + size_msgp1 + size_field, msgp2, size_msgp2);
+
+	memcpy(buffer + size_msgp1 + size_field + size_msgp2, msgp_value, size_msgp_value);
+
+	memcpy(buffer + size_msgp1 + size_field + size_msgp2 + size_msgp_value, msgp3, size_msgp3);
+
+	size_msg = size_msgp1 + size_msgp2 + size_msgp_value + size_field + size_msgp3;
+
+	return size_msg;
 }
 
-uint8_t create_response_datapoint_acc(char *buffer, int asChild) {
+/*uint8_t create_response_datapoint_acc(char *buffer, int asChild, int freeFall) {
 	size_t size_acc;
 	int size_msgp1, size_msgp2;
 	const char *msgp1, *msgp2;
@@ -911,10 +988,11 @@ uint8_t create_response_datapoint_acc(char *buffer, int asChild) {
 	memcpy(buffer + size_msgp1 + size_acc, msgp2, size_msgp2);
 
 	return size_msg;
-}
+}*/
 
 uint8_t create_response_object_acc(char *buffer) {
-	size_t size_datapoint;
+	size_t size_datapoint_activity;
+    size_t size_datapoint_freefall;
 	int size_msgp1, size_msgp2;
 	const char *msgp1, *msgp2;
 	uint8_t size_msg;
@@ -926,11 +1004,12 @@ uint8_t create_response_object_acc(char *buffer) {
 
 	memcpy(buffer, msgp1, size_msgp1);
 	// creates data point and copies content to message buffer
-	size_datapoint = create_response_datapoint_acc(buffer + size_msgp1, 1);
+	size_datapoint_activity = create_response_datapoint_acc(buffer + size_msgp1 , 1,0);
+	size_datapoint_freefall = create_response_datapoint_acc(buffer + size_msgp1 + size_datapoint_activity, 1,1);
 
-	memcpy(buffer + size_msgp1 + size_datapoint, msgp2, size_msgp2);
+	memcpy(buffer + size_msgp1 + + size_datapoint_activity + size_datapoint_freefall, msgp2, size_msgp2);
 
-	size_msg = size_msgp1 + size_msgp2 + size_datapoint;
+	size_msg = size_msgp1 + size_msgp2 + size_datapoint_activity + size_datapoint_freefall;
 
 	return size_msg;
 }
@@ -986,10 +1065,10 @@ void acc_handler(void* request, void* response, uint8_t *buffer,
 /*
  * Accelerometer.
  */
-EVENT_RESOURCE(event_acc, METHOD_GET, "acc/value",
-		"title=\"Acceleration Value\";obs");
+EVENT_RESOURCE(event_acc_active, METHOD_GET, "acc/active",
+		"title=\"Active Value\";obs");
 
-void event_acc_handler(void* request, void* response, uint8_t *buffer,
+void event_acc_active_handler(void* request, void* response, uint8_t *buffer,
 		uint16_t preferred_size, int32_t *offset) {
 	PRINTF(
 			"event_acc_handler called - preferred size: %u, offset:%ld,\n", preferred_size, *offset);
@@ -1008,11 +1087,10 @@ void event_acc_handler(void* request, void* response, uint8_t *buffer,
 		return;
 	}
 
-
 	/* decide upon content-format */
 	REST.set_header_content_type(response, REST.type.APPLICATION_XML);
 
-	if ((size_msg = create_response_datapoint_acc(message, 0)) <= 0) {
+	if ((size_msg = create_response_datapoint_acc(message, 0,0)) <= 0) {
 		PRINTF("ERROR while creating message!\n");
 		REST.set_response_status(response,
 				REST.status.INTERNAL_SERVER_ERROR);
@@ -1027,7 +1105,7 @@ void event_acc_handler(void* request, void* response, uint8_t *buffer,
 
 /* Additionally, a handler function named [resource name]_event_handler must be implemented for each PERIODIC_RESOURCE defined.
  * It will be called by the REST manager process with the defined period. */
-void event_acc_event_handler(resource_t *r) {
+void event_acc_active_event_handler(resource_t *r) {
 	static char buffer[ACC_MSG_MAX_SIZE];
 	size_t size_msg;
 	static uint8_t acc_events = 0;
@@ -1042,7 +1120,7 @@ void event_acc_event_handler(resource_t *r) {
 		return;
 	}
 
-	if ((size_msg = create_response_datapoint_acc(buffer, 0)) <= 0) {
+	if ((size_msg = create_response_datapoint_acc(buffer, 0,0)) <= 0) {
 		PRINTF("ERROR while creating message!\n");
 		return;
 	}
@@ -1055,6 +1133,138 @@ void event_acc_event_handler(resource_t *r) {
 	/* Notify the registered observers with the given message type, observe option, and payload. */
 	REST.notify_subscribers(r, acc_events, notification);
 }
+
+#if GROUP_COMM_ENABLED
+	/*
+	 * Handles group communication updates.
+	 */
+	void acc_freefall_groupCommHandler(char* payload){
+		// dummy function, required for group comm address management
+	}
+#endif
+
+/*
+ * Accelerometer.
+ */
+EVENT_RESOURCE(event_acc_freefall, METHOD_GET | METHOD_POST | HAS_SUB_RESOURCES, "acc/freefall",
+		"title=\"Freefall Value\";obs");
+
+void event_acc_freefall_handler(void* request, void* response, uint8_t *buffer,
+		uint16_t preferred_size, int32_t *offset) {
+	PRINTF(
+			"event_acc_handler called - preferred size: %u, offset:%ld,\n", preferred_size, *offset);
+	/* Save the message as static variable, so it is retained through multiple calls (chunked resource) */
+	static char message[ACC_MSG_MAX_SIZE];
+	static uint8_t size_msg;
+
+	char *err_msg;
+
+#if GROUP_COMM_ENABLED
+
+	int newVal = 0;
+	const uint8_t *incoming = NULL;
+	static size_t payload_len = 0;
+	uip_ip6addr_t groupAddress;
+	gc_handler leb_blue_handler = &acc_freefall_groupCommHandler;
+
+	int16_t groupIdentifier = 0;
+
+	const char *uri_path = NULL;
+	int len = REST.get_url(request, &uri_path);
+
+	// for PUT and POST request we need to process the payload content
+	if( REST.get_method_type(request) == METHOD_PUT || REST.get_method_type(request) == METHOD_POST){
+		payload_len = REST.get_request_payload(request, &incoming);
+		memcpy(payload_buffer, incoming, payload_len);
+	}
+
+    if(strstr(uri_path, "joinGroup") && REST.get_method_type(request) == METHOD_POST ){
+    	printf("#### Join Group Called!");
+    	PRINTF("Join group called.\n");
+    	get_ipv6_multicast_addr(payload_buffer, &groupAddress);
+
+    	// join locally for the multicast address
+    	uip_ds6_maddr_add(&groupAddress);
+
+    	PRINT6ADDR(&groupAddress);
+    	extract_group_identifier(&groupAddress, &groupIdentifier);
+    	PRINTF("\n group identifier: %d\n", groupIdentifier);
+    	join_group(groupIdentifier, leb_blue_handler);
+
+
+    }
+    else if(strstr(uri_path, "leaveGroup") && REST.get_method_type(request) == METHOD_POST){
+    	PRINTF("Leave group called.\n");
+    	get_ipv6_multicast_addr(payload_buffer, &groupAddress);
+    	PRINT6ADDR(&groupAddress);
+    	extract_group_identifier(&groupAddress, &groupIdentifier);
+    	PRINTF("\n group identifier: %d\n", groupIdentifier);
+    	leave_group(groupIdentifier,  leb_blue_handler);
+    }
+#endif
+
+	/* Check the offset for boundaries of t        he resource data. */
+	if (*offset >= CHUNKS_TOTAL) {
+		REST.set_response_status(response, REST.status.BAD_OPTION);
+		/* A block error message should not exceed the minimum block size (16). */
+		err_msg = "BlockOutOfScope";
+		REST.set_response_payload(response, err_msg, strlen(err_msg));
+		return;
+	}
+
+	/* decide upon content-format */
+	REST.set_header_content_type(response, REST.type.APPLICATION_XML);
+
+	if ((size_msg = create_response_datapoint_acc(message, 0,1)) <= 0) {
+		PRINTF("ERROR while creating message!\n");
+		REST.set_response_status(response,
+				REST.status.INTERNAL_SERVER_ERROR);
+		err_msg = "ERROR while creating message :\\";
+		REST.set_response_payload(response, err_msg, strlen(err_msg));
+		return;
+	}
+
+	send_message(message, size_msg, request, response, buffer, preferred_size,
+			offset);
+}
+
+/* Additionally, a handler function named [resource name]_event_handler must be implemented for each PERIODIC_RESOURCE defined.
+ * It will be called by the REST manager process with the defined period. */
+void event_acc_freefall_event_handler(resource_t *r) {
+	static char buffer[ACC_MSG_MAX_SIZE];
+	size_t size_msg;
+	static uint8_t acc_events = 0;
+
+	if (acc_register_acc & ADXL345_INT_INACTIVITY) {
+		acc = ACC_INACTIVITY;
+	} else if (acc_register_acc & ADXL345_INT_FREEFALL) {
+		acc = ACC_FREEFALL;
+	} else if (acc_register_acc & ADXL345_INT_ACTIVITY) {
+		acc = ACC_ACTIVITY;
+	} else {
+		return;
+	}
+
+	if ((size_msg = create_response_datapoint_acc(buffer, 0,1)) <= 0) {
+		PRINTF("ERROR while creating message!\n");
+		return;
+	}
+
+	/* Build notification. */
+	coap_packet_t notification[1]; /* This way the packet can be treated as pointer as usual. */
+	coap_init_message(notification, COAP_TYPE_NON, CONTENT_2_05, 0);
+	coap_set_payload(notification, buffer, size_msg);
+
+	/* Notify the registered observers with the given message type, observe option, and payload. */
+	REST.notify_subscribers(r, acc_events, notification);
+
+	#if GROUP_COMM_ENABLED
+		// check for registered group communication variables
+		send_group_update(buffer, size_msg, &acc_freefall_groupCommHandler);
+
+	#endif
+}
+
 #endif //RES_ACC
 
 #if RES_LEDS
@@ -1543,7 +1753,8 @@ PROCESS_THREAD(iotsys_server, ev, data) {
 #endif
 #if RES_ACC
 		rest_activate_resource(&resource_acc);
-		rest_activate_event_resource(&resource_event_acc);
+		rest_activate_event_resource(&resource_event_acc_active);
+		rest_activate_event_resource(&resource_event_acc_freefall);
 #endif
 #if RES_BUTTON
 		rest_activate_resource(&resource_button);
@@ -1603,7 +1814,8 @@ PROCESS_THREAD(iotsys_server, ev, data) {
 #if RES_ACC
 			if (ev == event_acc) {
 				printf("Acc event occured.\n");
-				event_acc_event_handler(&resource_event_acc);
+				event_acc_active_event_handler(&resource_event_acc_active);
+				event_acc_freefall_event_handler(&resource_event_acc_freefall);
 			}
 #endif
 		} /* while (1) */
