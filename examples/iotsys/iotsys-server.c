@@ -48,7 +48,7 @@
 #define RES_BUTTON 0
 #define RES_LEDS 0
 
-#define GROUP_COMM_ENABLED 1
+#define GROUP_COMM_ENABLED 0
 #define UDP_PORT 5683
 
 #if RES_TEMP
