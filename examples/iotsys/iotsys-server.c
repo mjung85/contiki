@@ -43,12 +43,14 @@
 
 #include "erbium.h"
 
-#define RES_TEMP 1
-#define RES_ACC 0
+#define RES_TEMP 0
+#define RES_ACC 1
+#define RES_ACC_ACTIVE 0
+#define RES_ACC_FREEFALL 1
 #define RES_BUTTON 0
 #define RES_LEDS 0
 
-#define GROUP_COMM_ENABLED 0
+#define GROUP_COMM_ENABLED 1
 #define UDP_PORT 5683
 
 #if RES_TEMP
@@ -894,7 +896,7 @@ uint8_t create_response_datapoint_acc(char *buffer,
 	int size_msgp1, size_msgp2, size_msgp3, size_field;
 	const char *msgp1, *msgp2, *msgp3, *msgp_active, *msgp_freefall, *msgp_green;
 	char *msgp_field; // will point to active, freefall
-	int value = 0; // on or off, depending on state
+	int value = 1; // on or off, depending on state
 	const char *msg_true;
 	const char *msg_false;
 	char *msgp_value;
@@ -1070,6 +1072,7 @@ void acc_handler(void* request, void* response, uint8_t *buffer,
 			offset);
 }
 
+#if RES_ACC_ACTIVE
 /*
  * Accelerometer.
  */
@@ -1142,6 +1145,10 @@ void event_acc_active_event_handler(resource_t *r) {
 	REST.notify_subscribers(r, acc_events, notification);
 }
 
+#endif
+
+#if RES_ACC_FREEFALL
+
 #if GROUP_COMM_ENABLED
 	/*
 	 * Handles group communication updates.
@@ -1150,7 +1157,6 @@ void event_acc_active_event_handler(resource_t *r) {
 		// dummy function, required for group comm address management
 	}
 #endif
-
 /*
  * Accelerometer.
  */
@@ -1272,6 +1278,7 @@ void event_acc_freefall_event_handler(resource_t *r) {
 
 	#endif
 }
+#endif
 
 #endif //RES_ACC
 
@@ -1768,9 +1775,13 @@ PROCESS_THREAD(iotsys_server, ev, data) {
 #endif
 #if RES_ACC
 		rest_activate_resource(&resource_acc);
+#if RES_ACC_ACTIVE
 		rest_activate_event_resource(&resource_event_acc_active);
+#endif // RES_ACC_ACTIVE
+#if RES_ACC_FREEFALL
 		rest_activate_event_resource(&resource_event_acc_freefall);
-#endif
+#endif // RES_ACC_FREFALL
+#endif // RES_ACC
 #if RES_BUTTON
 		rest_activate_resource(&resource_button);
 		rest_activate_event_resource(&resource_button_value);
@@ -1826,8 +1837,12 @@ PROCESS_THREAD(iotsys_server, ev, data) {
 #if RES_ACC
 			if (ev == event_acc) {
 				printf("Acc event occured.\n");
+#if RES_ACC_ACTIVE
 				event_acc_active_event_handler(&resource_event_acc_active);
+#endif
+#if RES_ACC_FREEFALL
 				event_acc_freefall_event_handler(&resource_event_acc_freefall);
+#endif
 			}
 #endif
 		} /* while (1) */
