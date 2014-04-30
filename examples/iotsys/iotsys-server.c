@@ -43,8 +43,8 @@
 
 #include "erbium.h"
 
-#define RES_TEMP 0
-#define RES_ACC 1
+#define RES_TEMP 1
+#define RES_ACC 0
 #define RES_BUTTON 0
 #define RES_LEDS 0
 
@@ -371,6 +371,7 @@ int temp_to_buff(char* buffer) {
 	int16_t raw;
 	uint16_t absraw;
 	int16_t sign = 1;
+	uint16_t offset = -5;
 
 	/* get temperature */
 	raw = tmp102_read_temp_raw();
@@ -382,7 +383,7 @@ int temp_to_buff(char* buffer) {
 		sign = -1;
 	}
 
-	tempint = (absraw >> 8) * sign;
+	tempint = (absraw >> 8) * sign + offset;
 	tempfrac = ((absraw >> 4) % 16) * 625; // Info in 1/10000 of degree
 	tempfrac = ((tempfrac) / 1000); // Round to 1 decimal
 
@@ -515,7 +516,9 @@ void temp_group_commhandler(char* payload){
  */
 PERIODIC_RESOURCE(value, METHOD_GET, "temp/value",
 		"title=\"Temperature Value;obs\"", 5*CLOCK_SECOND);
+#if GROUP_COMM_ENABLED
 SUB_RESOURCE(value_gc, METHOD_POST | METHOD_GET | HAS_SUB_RESOURCES, "temp/value", "", value);
+#endif
 void value_handler(void* request, void* response, uint8_t *buffer,
 		uint16_t preferred_size, int32_t *offset) {
 
@@ -617,6 +620,7 @@ void value_periodic_handler(resource_t *r) {
 			PRINTF("ERROR while creating message!\n");
 			return;
 		}
+		printf("Notify subscribers\n");
 
 		/* Build notification. */
 		coap_packet_t notification[1]; /* This way the packet can be treated as pointer as usual. */
@@ -625,11 +629,15 @@ void value_periodic_handler(resource_t *r) {
 
 		/* Notify the registered observers with the given message type, observe option, and payload. */
 		REST.notify_subscribers(r, obs_counter, notification);
+		#if GROUP_COMM_ENABLED
+		// check for registered group communication variables
+			send_group_update(buffer, size_msg, &temp_group_commhandler);
+		#endif
 	}
-	#if GROUP_COMM_ENABLED
-	// check for registered group communication variables
-		send_group_update(buffer, size_msg, &temp_group_commhandler);
-	#endif
+	else{
+		printf("Same value\n");
+	}
+
 }
 
 
@@ -1742,6 +1750,11 @@ PROCESS_THREAD(iotsys_server, ev, data) {
 		PRINTF("LL header: %u\n", UIP_LLH_LEN);
 		PRINTF("IP+UDP header: %u\n", UIP_IPUDPH_LEN);
 		PRINTF("REST max chunk: %u\n", REST_MAX_CHUNK_SIZE);
+
+		// activate temperature
+#if RES_TEMP
+		tmp102_init();
+#endif
 		/* Initialize the REST engine. */
 		rest_init_engine();
 
@@ -1749,7 +1762,9 @@ PROCESS_THREAD(iotsys_server, ev, data) {
 #if RES_TEMP
 		rest_activate_resource(&resource_temp);
 		rest_activate_periodic_resource(&periodic_resource_value);
+#if GROUP_COMM_ENABLED
 		rest_activate_resource(&resource_value_gc);
+#endif
 #endif
 #if RES_ACC
 		rest_activate_resource(&resource_acc);
@@ -1775,10 +1790,7 @@ PROCESS_THREAD(iotsys_server, ev, data) {
 #if RES_ACC
 		event_acc = process_alloc_event();
 #endif
-		// activate temperature
-#if RES_TEMP
-		tmp102_init();
-#endif
+
 
 		/* Start and setup the accelerometer with default values, eg no interrupts enabled. */
 #if RES_ACC || RES_BUTTON
