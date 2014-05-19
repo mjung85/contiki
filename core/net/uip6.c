@@ -87,7 +87,7 @@ extern struct uip_fallback_interface UIP_FALLBACK_INTERFACE;
 /* For Debug, logging, statistics                                            */
 /*---------------------------------------------------------------------------*/
 
-#define DEBUG 0
+#define DEBUG 1
 #include "net/uip-debug.h"
 
 #if DEBUG
