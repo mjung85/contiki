@@ -47,8 +47,8 @@
 #define RES_ACC 0
 #define RES_ACC_ACTIVE 0
 #define RES_ACC_FREEFALL 0
-#define RES_BUTTON 0
-#define RES_LEDS 1
+#define RES_BUTTON 1
+#define RES_LEDS 0
 #define RES_LEDS_OBSERVE 0
 
 #define GROUP_COMM_ENABLED 1
