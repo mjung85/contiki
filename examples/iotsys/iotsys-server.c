@@ -328,13 +328,13 @@ void join_group(int groupIdentifier, gc_handler handler  ){
 
 			gc_handlers[i].group_identifier = groupIdentifier;
 			//gc_handlers[i].group_identifier &= (groupAddress.u16[6] << 16);
-			printf("Assigned slot: %d\n", gc_handlers[i].group_identifier);
+			printf("\n###### Assigned or found group identifier: %d on slot %d\n", gc_handlers[i].group_identifier, i);
 
 			// adding gc handler
 			for(l=0; l < MAX_GC_HANDLERS; l++){
 				if(gc_handlers[i].handlers[l] == NULL ||  gc_handlers[i].handlers[l] == &handler ){
 					gc_handlers[i].handlers[l] = handler;
-					PRINTF("(Re-)Assigned callback on slot %d\n", l);
+					printf("\n#####(Re-)Assigned callback on slot %d\n", l);
 					break;
 				}
 			}
@@ -350,14 +350,14 @@ void leave_group(int groupIdentifier, gc_handler handler){
 
 			gc_handlers[i].group_identifier = groupIdentifier;
 			//gc_handlers[i].group_identifier &= (groupAddress.u16[6] << 16);
-			PRINTF("Found slot: %d\n", gc_handlers[i].group_identifier);
+			printf("\n#### leave group identifier: %d on slot %d\n", gc_handlers[i].group_identifier, i);
 
 			// adding gc handler
 			for(l=0; l < MAX_GC_HANDLERS; l++){
 
 				if(gc_handlers[i].handlers[l] == handler ){
 					gc_handlers[i].handlers[l] = NULL;
-					PRINTF("Removed callback from slot %d\n", l);
+					PRINTF("\n### removed callback from slot %d\n", l);
 					break;
 				}
 			}
@@ -1712,7 +1712,7 @@ void led_blue_handler(void* request, void* response, uint8_t *buffer,
 
 #if GROUP_COMM_ENABLED
 	uip_ip6addr_t groupAddress;
-	gc_handler leb_blue_handler = &led_blue_groupCommHandler;
+	gc_handler led_blue_handler = &led_blue_groupCommHandler;
 
 	int16_t groupIdentifier = 0;
 
@@ -1727,7 +1727,7 @@ void led_blue_handler(void* request, void* response, uint8_t *buffer,
     	PRINT6ADDR(&groupAddress);
     	extract_group_identifier(&groupAddress, &groupIdentifier);
     	PRINTF("\n group identifier: %d\n", groupIdentifier);
-    	join_group(groupIdentifier, leb_blue_handler);
+    	join_group(groupIdentifier, led_blue_handler);
 
 
     }
@@ -1737,7 +1737,7 @@ void led_blue_handler(void* request, void* response, uint8_t *buffer,
     	PRINT6ADDR(&groupAddress);
     	extract_group_identifier(&groupAddress, &groupIdentifier);
     	PRINTF("\n group identifier: %d\n", groupIdentifier);
-    	leave_group(groupIdentifier,  leb_blue_handler);
+    	leave_group(groupIdentifier,  led_blue_handler);
     }
 #endif
 

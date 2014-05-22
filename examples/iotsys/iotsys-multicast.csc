@@ -127,7 +127,7 @@
   <plugin>
     org.contikios.cooja.plugins.SimControl
     <width>331</width>
-    <z>3</z>
+    <z>1</z>
     <height>250</height>
     <location_x>579</location_x>
     <location_y>-3</location_y>
@@ -145,11 +145,10 @@
       <skin>org.contikios.cooja.plugins.skins.UDGMVisualizerSkin</skin>
       <skin>org.contikios.cooja.plugins.skins.AttributeVisualizerSkin</skin>
       <skin>org.contikios.cooja.mspmote.plugins.CodeVisualizerSkin</skin>
-      <skin>org.contikios.cooja.plugins.skins.LogVisualizerSkin</skin>
       <viewport>7.020244825371944 0.0 0.0 7.020244825371944 101.26217642584776 -2.7708036247827166</viewport>
     </plugin_config>
     <width>560</width>
-    <z>1</z>
+    <z>0</z>
     <height>722</height>
     <location_x>7</location_x>
     <location_y>7</location_y>
@@ -162,7 +161,7 @@
       <coloring />
     </plugin_config>
     <width>1316</width>
-    <z>0</z>
+    <z>2</z>
     <height>474</height>
     <location_x>580</location_x>
     <location_y>257</location_y>
@@ -179,7 +178,7 @@
       <zoomfactor>100.0</zoomfactor>
     </plugin_config>
     <width>1904</width>
-    <z>2</z>
+    <z>3</z>
     <height>166</height>
     <location_x>0</location_x>
     <location_y>742</location_y>
