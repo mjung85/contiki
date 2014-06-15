@@ -84,7 +84,7 @@
 #warning "IoTSyS server example"
 #endif /* CoAP-specific example */
 
-#define DEBUG 1
+#define DEBUG 0
 #if DEBUG
 #define PRINTF(...) printf(__VA_ARGS__)
 #define PRINT6ADDR(addr) PRINTF("[%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x]", ((uint8_t *)addr)[0], ((uint8_t *)addr)[1], ((uint8_t *)addr)[2], ((uint8_t *)addr)[3], ((uint8_t *)addr)[4], ((uint8_t *)addr)[5], ((uint8_t *)addr)[6], ((uint8_t *)addr)[7], ((uint8_t *)addr)[8], ((uint8_t *)addr)[9], ((uint8_t *)addr)[10], ((uint8_t *)addr)[11], ((uint8_t *)addr)[12], ((uint8_t *)addr)[13], ((uint8_t *)addr)[14], ((uint8_t *)addr)[15])
@@ -109,8 +109,8 @@
 
 
 // Group communication definition
-#define MAX_GC_HANDLERS 2
-#define MAX_GC_GROUPS 5
+#define MAX_GC_HANDLERS 3
+#define MAX_GC_GROUPS 4
 
 typedef void (*gc_handler) (char*);
 
@@ -1440,9 +1440,23 @@ leds_handler(void* request, void* response, uint8_t *buffer, uint16_t preferred_
 }
 
 /*
+ * Handles group communication updates.
+ */
+void led_red_groupCommHandler(char* payload){
+	int newVal;
+	newVal = get_bool_value_obix(payload);
+	if(newVal){
+		leds_on(LEDS_RED);
+	}
+	else{
+		leds_off(LEDS_RED);
+	}
+}
+
+/*
  * Red led
  */
-RESOURCE(led_red, METHOD_PUT | METHOD_GET, "leds/red",
+RESOURCE(led_red, METHOD_PUT | METHOD_GET | HAS_SUB_RESOURCES | METHOD_POST, "leds/red",
 		"title=\"Red led\"");
 
 void led_red_handler(void* request, void* response, uint8_t *buffer,
@@ -1458,6 +1472,46 @@ void led_red_handler(void* request, void* response, uint8_t *buffer,
 	int payload_len = 0;
 	int newVal = 0;
 	const uint8_t *incoming;
+
+	const char *uri_path = NULL;
+	int len = REST.get_url(request, &uri_path);
+
+	// for PUT and POST request we need to process the payload content
+	if( REST.get_method_type(request) == METHOD_PUT || REST.get_method_type(request) == METHOD_POST){
+		payload_len = REST.get_request_payload(request, &incoming);
+		memcpy(payload_buffer, incoming, payload_len);
+	}
+
+#if GROUP_COMM_ENABLED
+	uip_ip6addr_t groupAddress;
+	gc_handler leb_red_handler = &led_red_groupCommHandler;
+
+	int16_t groupIdentifier = 0;
+
+    if(strstr(uri_path, "joinGroup") && REST.get_method_type(request) == METHOD_POST ){
+    	printf("#### Join Group Called!");
+    	PRINTF("Join group called.\n");
+    	get_ipv6_multicast_addr(payload_buffer, &groupAddress);
+
+    	// join locally for the multicast address
+    	uip_ds6_maddr_add(&groupAddress);
+
+    	PRINT6ADDR(&groupAddress);
+    	extract_group_identifier(&groupAddress, &groupIdentifier);
+    	PRINTF("\n group identifier: %d\n", groupIdentifier);
+    	join_group(groupIdentifier, leb_red_handler);
+
+
+    }
+    else if(strstr(uri_path, "leaveGroup") && REST.get_method_type(request) == METHOD_POST){
+    	PRINTF("Leave group called.\n");
+    	get_ipv6_multicast_addr(payload_buffer, &groupAddress);
+    	PRINT6ADDR(&groupAddress);
+    	extract_group_identifier(&groupAddress, &groupIdentifier);
+    	PRINTF("\n group identifier: %d\n", groupIdentifier);
+    	leave_group(groupIdentifier,  leb_red_handler);
+    }
+#endif
 
 	if( REST.get_method_type(request) == METHOD_PUT){
 		payload_len = REST.get_request_payload(request, &incoming);
@@ -1498,10 +1552,25 @@ void led_red_handler(void* request, void* response, uint8_t *buffer,
 			offset);
 }
 
+
+/*
+ * Handles group communication updates.
+ */
+void led_green_groupCommHandler(char* payload){
+	int newVal;
+	newVal = get_bool_value_obix(payload);
+	if(newVal){
+		leds_on(LEDS_GREEN);
+	}
+	else{
+		leds_off(LEDS_GREEN);
+	}
+}
+
 /*
  * Green led
  */
-RESOURCE(led_green, METHOD_PUT | METHOD_GET, "leds/green",
+RESOURCE(led_green, METHOD_PUT | METHOD_GET | HAS_SUB_RESOURCES | METHOD_POST, "leds/green",
 		"title=\"Green led\"");
 
 void led_green_handler(void* request, void* response, uint8_t *buffer,
@@ -1518,6 +1587,46 @@ void led_green_handler(void* request, void* response, uint8_t *buffer,
 	int payload_len = 0;
 	int newVal = 0;
 
+	const char *uri_path = NULL;
+	int len = REST.get_url(request, &uri_path);
+
+	// for PUT and POST request we need to process the payload content
+	if( REST.get_method_type(request) == METHOD_PUT || REST.get_method_type(request) == METHOD_POST){
+		payload_len = REST.get_request_payload(request, &incoming);
+		memcpy(payload_buffer, incoming, payload_len);
+	}
+
+#if GROUP_COMM_ENABLED
+	uip_ip6addr_t groupAddress;
+	gc_handler leb_green_handler = &led_green_groupCommHandler;
+
+	int16_t groupIdentifier = 0;
+
+    if(strstr(uri_path, "joinGroup") && REST.get_method_type(request) == METHOD_POST ){
+    	printf("#### Join Group Called!");
+    	PRINTF("Join group called.\n");
+    	get_ipv6_multicast_addr(payload_buffer, &groupAddress);
+
+    	// join locally for the multicast address
+    	uip_ds6_maddr_add(&groupAddress);
+
+    	PRINT6ADDR(&groupAddress);
+    	extract_group_identifier(&groupAddress, &groupIdentifier);
+    	PRINTF("\n group identifier: %d\n", groupIdentifier);
+    	join_group(groupIdentifier, leb_green_handler);
+
+
+    }
+    else if(strstr(uri_path, "leaveGroup") && REST.get_method_type(request) == METHOD_POST){
+    	PRINTF("Leave group called.\n");
+    	get_ipv6_multicast_addr(payload_buffer, &groupAddress);
+    	PRINT6ADDR(&groupAddress);
+    	extract_group_identifier(&groupAddress, &groupIdentifier);
+    	PRINTF("\n group identifier: %d\n", groupIdentifier);
+    	leave_group(groupIdentifier,  leb_green_handler);
+    }
+#endif
+
 	if( REST.get_method_type(request) == METHOD_PUT){
 		payload_len = REST.get_request_payload(request, &incoming);
 		memcpy(payload_buffer, incoming, payload_len);
@@ -1529,6 +1638,7 @@ void led_green_handler(void* request, void* response, uint8_t *buffer,
 			leds_off(LEDS_GREEN);
 		}
 	}
+
 
 	// Check the offset for boundaries of the resource data.
 	if (*offset >= CHUNKS_TOTAL) {
