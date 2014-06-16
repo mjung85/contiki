@@ -1217,6 +1217,8 @@ uip_process(uint8_t flag)
       PRINT6ADDR(&UIP_IP_BUF->destipaddr);
       if(uip_is_addr_mcast(&UIP_IP_BUF->destipaddr) && uip_is_addr_mcast_site_local(&UIP_IP_BUF->destipaddr) && uip_is_addr_mcast_transient(&UIP_IP_BUF->destipaddr)){
     	  UIP_FALLBACK_INTERFACE.output();
+    	  // TODO: check if packet came from wsn or from tunnel interface
+    	  goto send;
       }
 #endif /* !UIP_FALLBACK_INTERFACE */
       PRINTF("Dropping packet, not for me and link local or multicast\n");
