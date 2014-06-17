@@ -87,10 +87,10 @@
 #define PACKETBUF_CONF_ATTRS_INLINE 1
 
 #ifndef RF_CHANNEL
-#define RF_CHANNEL              26
+#define RF_CHANNEL              25
 #endif /* RF_CHANNEL */
 
-#define IEEE802154_CONF_PANID       0xABCD
+#define IEEE802154_CONF_PANID       0xA070
 
 #define SHELL_VARS_CONF_RAM_BEGIN 0x1100
 #define SHELL_VARS_CONF_RAM_END 0x2000

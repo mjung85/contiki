@@ -97,14 +97,14 @@
 #endif
 
 #ifndef CC2420_CONF_CHANNEL
-#define CC2420_CONF_CHANNEL              26
+#define CC2420_CONF_CHANNEL              25
 #endif /* CC2420_CONF_CHANNEL */
 
 #ifndef CC2420_CONF_CCA_THRESH
 #define CC2420_CONF_CCA_THRESH              -45
 #endif /* CC2420_CONF_CCA_THRESH */
 
-#define IEEE802154_CONF_PANID       0xABCD
+#define IEEE802154_CONF_PANID       0xA070
 
 #define SHELL_VARS_CONF_RAM_BEGIN 0x1100
 #define SHELL_VARS_CONF_RAM_END 0x2000

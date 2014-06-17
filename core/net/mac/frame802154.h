@@ -67,7 +67,7 @@
 #ifdef IEEE802154_CONF_PANID
 #define IEEE802154_PANID           IEEE802154_CONF_PANID
 #else
-#define IEEE802154_PANID           0xABCD
+#define IEEE802154_PANID           0xA070
 #endif
 
 /* Macros & Defines */
