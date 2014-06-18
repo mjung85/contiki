@@ -89,7 +89,7 @@
 #if UIP_CONF_ROUTER
 #define UIP_DS6_MADDR_NBS 2 + UIP_DS6_ADDR_NB   /* all routers + all nodes + one solicited per unicast */
 #else
-#define UIP_DS6_MADDR_NBS 1 + UIP_DS6_ADDR_NB   /* all nodes + one solicited per unicast */
+#define UIP_DS6_MADDR_NBS 5 + UIP_DS6_ADDR_NB   /* all nodes + one solicited per unicast */
 #endif
 #ifndef UIP_CONF_DS6_MADDR_NBU
 #define UIP_DS6_MADDR_NBU 0

@@ -40,6 +40,7 @@
 #include <string.h>
 #include "contiki.h"
 #include "contiki-net.h"
+#include "clock.h"
 
 #include "erbium.h"
 
@@ -47,9 +48,11 @@
 #define RES_ACC 0
 #define RES_ACC_ACTIVE 0
 #define RES_ACC_FREEFALL 0
-#define RES_BUTTON 0
-#define RES_LEDS 1
+#define RES_BUTTON 1
+#define RES_LEDS 0
 #define RES_LEDS_OBSERVE 0
+
+#define EVENT_SENSITIVITY 1000
 
 #define GROUP_COMM_ENABLED 1
 #define UDP_PORT 5683
@@ -149,6 +152,7 @@ char buttonstring[BUTTON_BUFF_MAX];
 uint8_t virtual_button;
 uint8_t acc_register_tap;
 process_event_t event_tap;
+clock_time_t button_time = 0;
 #endif // RES_BUTTON
 
 #if RES_ACC
@@ -320,13 +324,22 @@ void extract_group_identifier(uip_ip6addr_t* ipv6Address, uint16_t* groupIdentif
 	*groupIdentifier += ((uint8_t *)ipv6Address)[15];
 }
 
-void join_group(int groupIdentifier, gc_handler handler  ){
+void join_group(uip_ip6addr_t* groupAddress, gc_handler handler  ){
 	int i,l=0;
+	int16_t groupIdentifier = 0;
 	// use last 32 bits
+	PRINT6ADDR(&groupAddress);
+	extract_group_identifier(groupAddress, &groupIdentifier);
+	printf("\njoin group identifier: %d\n", groupIdentifier);
 	for(i = 0; i < MAX_GC_GROUPS; i++){
+		// TODO should first check for already assigned group identifer and in a second loop check for the first free spot
 		if(gc_handlers[i].group_identifier == 0 || gc_handlers[i].group_identifier == groupIdentifier){ // free slot or same slot
 
-			gc_handlers[i].group_identifier = groupIdentifier;
+			if(gc_handlers[i].group_identifier != groupIdentifier){
+				gc_handlers[i].group_identifier = groupIdentifier;
+				uip_ds6_maddr_add(groupAddress); // join for mcast address
+			}
+
 			//gc_handlers[i].group_identifier &= (groupAddress.u16[6] << 16);
 			printf("\n###### Assigned or found group identifier: %d on slot %d\n", gc_handlers[i].group_identifier, i);
 
@@ -335,20 +348,36 @@ void join_group(int groupIdentifier, gc_handler handler  ){
 				if(gc_handlers[i].handlers[l] == NULL ||  gc_handlers[i].handlers[l] == &handler ){
 					gc_handlers[i].handlers[l] = handler;
 					printf("\n#####(Re-)Assigned callback on slot %d\n", l);
-					break;
+					return;
 				}
 			}
-			break;
+			// no free handler, --> overwrite first handler
+			printf("\n### overwrite first handler\n");
+			gc_handlers[i].handlers[0] = handler;
+			return;
 		}
+
 	}
+	// if we reach this line, no free group_identifier match or free space is found.
+	gc_handlers[0].group_identifier = groupIdentifier;
+	printf("\n overwrite first group identifier space.");
+	for(l=1; l < MAX_GC_HANDLERS; l++){
+		gc_handlers[0].handlers[l] = NULL;
+	}
+	// no free handler, --> overwrite first handler
+	printf("\n### overwrite first handler\n");
+	gc_handlers[0].handlers[0] = handler;
+	uip_ds6_maddr_add(groupAddress); // join for mcast address TODO: might not work, need also to free according mcast address
 }
 
-void leave_group(int groupIdentifier, gc_handler handler){
-	int i,l=0;
+void leave_group(uip_ip6addr_t* groupAddress, gc_handler handler){
+	int i,l,empty=0;
+	int16_t groupIdentifier = 0;
+	PRINT6ADDR(&groupAddress);
+	extract_group_identifier(groupAddress, &groupIdentifier);
+	PRINTF("\n group identifier: %d\n", groupIdentifier);
 	for(i = 0; i < MAX_GC_GROUPS; i++){
 		if(gc_handlers[i].group_identifier == groupIdentifier){ // free slot or same slot
-
-			gc_handlers[i].group_identifier = groupIdentifier;
 			//gc_handlers[i].group_identifier &= (groupAddress.u16[6] << 16);
 			printf("\n#### leave group identifier: %d on slot %d\n", gc_handlers[i].group_identifier, i);
 
@@ -361,9 +390,24 @@ void leave_group(int groupIdentifier, gc_handler handler){
 					break;
 				}
 			}
-			break;
+			printf("check if group identifier is empty.\n");
+			empty = 0;
+			// check if group identifier is empty, if yes --> assign 0
+			for(l=0; l < MAX_GC_HANDLERS; l++){
+				if(gc_handlers[i].handlers[l] == NULL ){
+					empty++;
+				}
+			}
+			if(empty == MAX_GC_HANDLERS){
+				printf("####### %%% remove group identifier: %d\n",gc_handlers[i].group_identifier);
+				uip_ds6_maddr_rm(groupAddress);
+				gc_handlers[i].group_identifier = 0;
+			}
 		}
+
+
 	}
+
 }
 #endif // GROUP_COMM_ENABLED
 
@@ -542,8 +586,6 @@ void value_handler(void* request, void* response, uint8_t *buffer,
 	uip_ip6addr_t groupAddress;
 	gc_handler handler = &temp_group_commhandler;
 
-	int16_t groupIdentifier = 0;
-
 	const char *uri_path = NULL;
 	int len = REST.get_url(request, &uri_path);
 
@@ -554,20 +596,13 @@ void value_handler(void* request, void* response, uint8_t *buffer,
 	}
 
 	if(strstr(uri_path, "joinGroup") && REST.get_method_type(request) == METHOD_POST ){
-		printf("Join group temp called.\n");
 		get_ipv6_multicast_addr(payload_buffer, &groupAddress);
-		PRINT6ADDR(&groupAddress);
-		extract_group_identifier(&groupAddress, &groupIdentifier);
-		PRINTF("\n group identifier: %d\n", groupIdentifier);
-		join_group(groupIdentifier, handler);
+		join_group(&groupAddress, handler);
 	}
 	else if(strstr(uri_path, "leaveGroup") && REST.get_method_type(request) == METHOD_POST){
-		PRINTF("Leave group called.\n");
+
 		get_ipv6_multicast_addr(payload_buffer, &groupAddress);
-		PRINT6ADDR(&groupAddress);
-		extract_group_identifier(&groupAddress, &groupIdentifier);
-		PRINTF("\n group identifier: %d\n", groupIdentifier);
-		leave_group(groupIdentifier,  handler);
+		leave_group(&groupAddress,  handler);
 	}
 #endif // GROUP_COMM_ENABLED
 
@@ -799,20 +834,14 @@ void button_value_handler(void* request, void* response, uint8_t *buffer,
 	}
 
 	if(strstr(uri_path, "joinGroup") && REST.get_method_type(request) == METHOD_POST ){
-		printf("Join group called.\n");
+		printf("join Group called\n");
 		get_ipv6_multicast_addr(payload_buffer, &groupAddress);
-		PRINT6ADDR(&groupAddress);
-		extract_group_identifier(&groupAddress, &groupIdentifier);
-		PRINTF("\n group identifier: %d\n", groupIdentifier);
-		join_group(groupIdentifier, handler);
+		join_group(&groupAddress, handler);
 	}
 	else if(strstr(uri_path, "leaveGroup") && REST.get_method_type(request) == METHOD_POST){
-		PRINTF("Leave group called.\n");
+		printf("leave group called.");
 		get_ipv6_multicast_addr(payload_buffer, &groupAddress);
-		PRINT6ADDR(&groupAddress);
-		extract_group_identifier(&groupAddress, &groupIdentifier);
-		PRINTF("\n group identifier: %d\n", groupIdentifier);
-		leave_group(groupIdentifier,  handler);
+		leave_group(&groupAddress,  handler);
 	}
 #endif // GROUP_COMM_ENABLED
 
@@ -1182,8 +1211,6 @@ void event_acc_freefall_handler(void* request, void* response, uint8_t *buffer,
 	uip_ip6addr_t groupAddress;
 	gc_handler leb_blue_handler = &acc_freefall_groupCommHandler;
 
-	int16_t groupIdentifier = 0;
-
 	const char *uri_path = NULL;
 	int len = REST.get_url(request, &uri_path);
 
@@ -1213,6 +1240,7 @@ void event_acc_freefall_handler(void* request, void* response, uint8_t *buffer,
     	get_ipv6_multicast_addr(payload_buffer, &groupAddress);
     	PRINT6ADDR(&groupAddress);
     	extract_group_identifier(&groupAddress, &groupIdentifier);
+
     	PRINTF("\n group identifier: %d\n", groupIdentifier);
     	leave_group(groupIdentifier,  leb_blue_handler);
     }
@@ -1484,33 +1512,17 @@ void led_red_handler(void* request, void* response, uint8_t *buffer,
 
 #if GROUP_COMM_ENABLED
 	uip_ip6addr_t groupAddress;
-	gc_handler leb_red_handler = &led_red_groupCommHandler;
+	gc_handler handler = &led_red_groupCommHandler;
 
-	int16_t groupIdentifier = 0;
+	if(strstr(uri_path, "joinGroup") && REST.get_method_type(request) == METHOD_POST ){
+		get_ipv6_multicast_addr(payload_buffer, &groupAddress);
+		join_group(&groupAddress, handler);
+	}
+	else if(strstr(uri_path, "leaveGroup") && REST.get_method_type(request) == METHOD_POST){
 
-    if(strstr(uri_path, "joinGroup") && REST.get_method_type(request) == METHOD_POST ){
-    	printf("#### Join Group Called!");
-    	PRINTF("Join group called.\n");
-    	get_ipv6_multicast_addr(payload_buffer, &groupAddress);
-
-    	// join locally for the multicast address
-    	uip_ds6_maddr_add(&groupAddress);
-
-    	PRINT6ADDR(&groupAddress);
-    	extract_group_identifier(&groupAddress, &groupIdentifier);
-    	PRINTF("\n group identifier: %d\n", groupIdentifier);
-    	join_group(groupIdentifier, leb_red_handler);
-
-
-    }
-    else if(strstr(uri_path, "leaveGroup") && REST.get_method_type(request) == METHOD_POST){
-    	PRINTF("Leave group called.\n");
-    	get_ipv6_multicast_addr(payload_buffer, &groupAddress);
-    	PRINT6ADDR(&groupAddress);
-    	extract_group_identifier(&groupAddress, &groupIdentifier);
-    	PRINTF("\n group identifier: %d\n", groupIdentifier);
-    	leave_group(groupIdentifier,  leb_red_handler);
-    }
+		get_ipv6_multicast_addr(payload_buffer, &groupAddress);
+		leave_group(&groupAddress,  handler);
+	}
 #endif
 
 	if( REST.get_method_type(request) == METHOD_PUT){
@@ -1598,33 +1610,19 @@ void led_green_handler(void* request, void* response, uint8_t *buffer,
 
 #if GROUP_COMM_ENABLED
 	uip_ip6addr_t groupAddress;
-	gc_handler leb_green_handler = &led_green_groupCommHandler;
-
-	int16_t groupIdentifier = 0;
-
-    if(strstr(uri_path, "joinGroup") && REST.get_method_type(request) == METHOD_POST ){
-    	printf("#### Join Group Called!");
-    	PRINTF("Join group called.\n");
-    	get_ipv6_multicast_addr(payload_buffer, &groupAddress);
-
-    	// join locally for the multicast address
-    	uip_ds6_maddr_add(&groupAddress);
-
-    	PRINT6ADDR(&groupAddress);
-    	extract_group_identifier(&groupAddress, &groupIdentifier);
-    	PRINTF("\n group identifier: %d\n", groupIdentifier);
-    	join_group(groupIdentifier, leb_green_handler);
+	gc_handler handler = &led_green_groupCommHandler;
 
 
-    }
-    else if(strstr(uri_path, "leaveGroup") && REST.get_method_type(request) == METHOD_POST){
-    	PRINTF("Leave group called.\n");
-    	get_ipv6_multicast_addr(payload_buffer, &groupAddress);
-    	PRINT6ADDR(&groupAddress);
-    	extract_group_identifier(&groupAddress, &groupIdentifier);
-    	PRINTF("\n group identifier: %d\n", groupIdentifier);
-    	leave_group(groupIdentifier,  leb_green_handler);
-    }
+
+	if(strstr(uri_path, "joinGroup") && REST.get_method_type(request) == METHOD_POST ){
+		get_ipv6_multicast_addr(payload_buffer, &groupAddress);
+		join_group(&groupAddress, handler);
+	}
+	else if(strstr(uri_path, "leaveGroup") && REST.get_method_type(request) == METHOD_POST){
+
+		get_ipv6_multicast_addr(payload_buffer, &groupAddress);
+		leave_group(&groupAddress,  handler);
+	}
 #endif
 
 	if( REST.get_method_type(request) == METHOD_PUT){
@@ -1712,33 +1710,17 @@ void led_blue_handler(void* request, void* response, uint8_t *buffer,
 
 #if GROUP_COMM_ENABLED
 	uip_ip6addr_t groupAddress;
-	gc_handler led_blue_handler = &led_blue_groupCommHandler;
+	gc_handler handler = &led_blue_groupCommHandler;
 
-	int16_t groupIdentifier = 0;
+	if(strstr(uri_path, "joinGroup") && REST.get_method_type(request) == METHOD_POST ){
+		get_ipv6_multicast_addr(payload_buffer, &groupAddress);
+		join_group(&groupAddress, handler);
+	}
+	else if(strstr(uri_path, "leaveGroup") && REST.get_method_type(request) == METHOD_POST){
 
-    if(strstr(uri_path, "joinGroup") && REST.get_method_type(request) == METHOD_POST ){
-    	printf("#### Join Group Called!");
-    	PRINTF("Join group called.\n");
-    	get_ipv6_multicast_addr(payload_buffer, &groupAddress);
-
-    	// join locally for the multicast address
-    	uip_ds6_maddr_add(&groupAddress);
-
-    	PRINT6ADDR(&groupAddress);
-    	extract_group_identifier(&groupAddress, &groupIdentifier);
-    	PRINTF("\n group identifier: %d\n", groupIdentifier);
-    	join_group(groupIdentifier, led_blue_handler);
-
-
-    }
-    else if(strstr(uri_path, "leaveGroup") && REST.get_method_type(request) == METHOD_POST){
-    	PRINTF("Leave group called.\n");
-    	get_ipv6_multicast_addr(payload_buffer, &groupAddress);
-    	PRINT6ADDR(&groupAddress);
-    	extract_group_identifier(&groupAddress, &groupIdentifier);
-    	PRINTF("\n group identifier: %d\n", groupIdentifier);
-    	leave_group(groupIdentifier,  led_blue_handler);
-    }
+		get_ipv6_multicast_addr(payload_buffer, &groupAddress);
+		leave_group(&groupAddress,  handler);
+	}
 #endif
 
 	char *err_msg;
@@ -1796,7 +1778,7 @@ group_comm_handler(const uip_ipaddr_t *sender_addr,
 	groupIdentifier =  ((uint8_t *)receiver_addr)[14];
     groupIdentifier <<= 8;
     groupIdentifier += ((uint8_t *)receiver_addr)[15];
-    PRINTF("\n######### Data received on group comm handler with length %d for group identifier %d\n",
+    printf("\n######### Data received on group comm handler with length %d for group identifier %d\n",
 		 datalen, groupIdentifier);
 
     for(i = 0; i < MAX_GC_GROUPS; i++){
@@ -1834,7 +1816,6 @@ PROCESS_THREAD(iotsys_server, ev, data) {
 	//uip_ipaddr_t addr;
 	//uip_ds6_maddr_t *maddr;
 	PROCESS_BEGIN()	;
-
 	 	//uip_ip6addr(&addr, 0xff15, 0, 0, 0, 0, 0, 0, 0x1);
 	 	//maddr = uip_ds6_maddr_add(&addr);
 	 	//  if(maddr == NULL){
@@ -1846,6 +1827,7 @@ PROCESS_THREAD(iotsys_server, ev, data) {
 	 	//	  PRINT6ADDR(&(maddr->ipaddr));
 	 	//  }
 		PRINTF("Starting IoTSyS Server\n");
+
 
 #if GROUP_COMM_ENABLED
 		PRINTF("### Registering group comm handler.\n");
@@ -1941,8 +1923,16 @@ PROCESS_THREAD(iotsys_server, ev, data) {
 			PROCESS_WAIT_EVENT();
 #if RES_BUTTON
 			if (ev == event_tap) {
-				printf("Tap event occured.\n");
-				button_value_event_handler(&button_value_handler);
+
+				if(button_time + CLOCK_SECOND < clock_time()){ // if tap event is older than a second
+			    		button_time = clock_time();
+					printf("Tap event occured.\n");
+					button_value_event_handler(&button_value_handler);
+				}
+				else{
+					printf("Tap surpressed.\n");
+				}
+
 			}
 #endif
 #if RES_ACC
