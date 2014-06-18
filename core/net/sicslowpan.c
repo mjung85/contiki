@@ -1895,7 +1895,7 @@ input(void)
       uncomp_hdr_len += UIP_IPH_LEN;
       break;
     case SICSLOWPAN_DISPATCH_BC0:
-          PRINTFI("sicslowpan input: BC0\n");
+          PRINTF("sicslowpan input: BC0\n");
           rime_hdr_len += SICSLOWPAN_BC0_HDR_LEN;
 
           /* Put uncompressed IP header in sicslowpan_buf. */

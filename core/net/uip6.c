@@ -87,7 +87,7 @@ extern struct uip_fallback_interface UIP_FALLBACK_INTERFACE;
 /* For Debug, logging, statistics                                            */
 /*---------------------------------------------------------------------------*/
 
-#define DEBUG 1
+#define DEBUG 0
 #include "net/uip-debug.h"
 
 #if DEBUG
@@ -1217,13 +1217,18 @@ uip_process(uint8_t flag)
       PRINT6ADDR(&UIP_IP_BUF->destipaddr);
       if(uip_is_addr_mcast(&UIP_IP_BUF->destipaddr) && uip_is_addr_mcast_site_local(&UIP_IP_BUF->destipaddr) && uip_is_addr_mcast_transient(&UIP_IP_BUF->destipaddr)){
     	  UIP_FALLBACK_INTERFACE.output();
+
     	  // TODO: check if packet came from wsn or from tunnel interface
-    	  goto send;
+    	  //goto send;
       }
 #endif /* !UIP_FALLBACK_INTERFACE */
-      PRINTF("Dropping packet, not for me and link local or multicast\n");
-      UIP_STAT(++uip_stat.ip.drop);
-      goto drop;
+      if(!
+    		  (uip_is_addr_mcast(&UIP_IP_BUF->destipaddr) && uip_is_addr_mcast_site_local(&UIP_IP_BUF->destipaddr) && uip_is_addr_mcast_transient(&UIP_IP_BUF->destipaddr))
+      ){
+    	  PRINTF("Dropping packet, not for me and link local or multicast\n");
+    	  UIP_STAT(++uip_stat.ip.drop);
+    	  goto drop;
+      }
     }
   }
 #else /* UIP_CONF_ROUTER */
