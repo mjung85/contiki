@@ -87,7 +87,7 @@
 #warning "IoTSyS server example"
 #endif /* CoAP-specific example */
 
-#define DEBUG 1
+#define DEBUG 0
 #if DEBUG
 #define PRINTF(...) printf(__VA_ARGS__)
 #define PRINT6ADDR(addr) PRINTF("[%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x]", ((uint8_t *)addr)[0], ((uint8_t *)addr)[1], ((uint8_t *)addr)[2], ((uint8_t *)addr)[3], ((uint8_t *)addr)[4], ((uint8_t *)addr)[5], ((uint8_t *)addr)[6], ((uint8_t *)addr)[7], ((uint8_t *)addr)[8], ((uint8_t *)addr)[9], ((uint8_t *)addr)[10], ((uint8_t *)addr)[11], ((uint8_t *)addr)[12], ((uint8_t *)addr)[13], ((uint8_t *)addr)[14], ((uint8_t *)addr)[15])
@@ -292,11 +292,12 @@ coap_packet_t request;
 static int msgid = 0;
 
 void send_coap_multicast(char* payload, size_t msgSize, uip_ip6addr_t* mc_address){
+	 printf("Send CoAP multicast.\n");
 	 coap_init_message(&request, COAP_TYPE_NON, COAP_PUT, msgid++ );
 	 coap_set_payload(&request, (uint8_t *)payload, msgSize);
 	 coap_set_header_uri_path(&request, "");
 	 coap_simple_request(mc_address, 5683, &request);
-	 PRINTF("\n--Done--\n");
+	 printf("\n--Done--\n");
 }
 
 void send_group_update(char* payload, size_t msgSize, gc_handler handler ){
@@ -308,7 +309,7 @@ void send_group_update(char* payload, size_t msgSize, gc_handler handler ){
 		// adding gc handler
 		for(l=0; l < MAX_GC_HANDLERS; l++){
 			if(gc_handlers[i].handlers[l] == handler ){
-				printf("Sending update to group identifier %d", gc_handlers[i].group_identifier);
+				printf("Sending update to group identifier %d\n", gc_handlers[i].group_identifier);
 				uip_ip6addr(&gc_address, 0xff15, 0, 0, 0, 0, 0, 0, gc_handlers[i].group_identifier);
 				send_coap_multicast(payload, msgSize, &gc_address);
 			}
@@ -418,7 +419,7 @@ int temp_to_buff(char* buffer) {
 	int16_t raw;
 	uint16_t absraw;
 	int16_t sign = 1;
-	uint16_t offset = -5;
+	uint16_t offset = 0;
 
 	/* get temperature */
 	raw = tmp102_read_temp_raw();
@@ -441,28 +442,33 @@ int temp_to_default_buff() {
 	return temp_to_buff(tempstring);
 }
 
-uint8_t create_response_datapoint_temperature(char *buffer,	int asChild) {
+uint8_t create_response_datapoint_temperature(char *buffer,	int asChild, int asGroupComm) {
 	size_t size_temp;
 	int size_msgp1, size_msgp2;
 	const char *msgp1, *msgp2;
 	uint8_t size_msg;
 
-	if (asChild) {
+	if (asChild > 0  && asGroupComm == 0) {
 		msgp1 =
 				"<real href=\"temp/value\" units=\"obix:units/celsius\" val=\"";
 		size_msgp1 = 56;
 		msgp2 = "\"/>";
 		size_msgp2 = 3;
 
-	} else {
+	}else if(asChild == 0 && asGroupComm == 0){
 		msgp1 = "<real href=\"value\" units=\"obix:units/celsius\" val=\"";
 		size_msgp1 = 51;
 		msgp2 = "\"/>\0";
 		size_msgp2 = 4;
+	}else{ // asChild == 0, asGroupComm > 0
+		msgp1 = "<real val=\"";
+		size_msgp1 = 11;
+		msgp2 = "\"/>\0";
+		size_msgp2 = 4;
 	}
 
-	msgp2 = "\"/>\0";
-	size_msgp2 = 4;
+	//msgp2 = "\"/>\0";
+	//size_msgp2 = 4;
 
 	if ((size_temp = temp_to_default_buff()) < 0) {
 		PRINTF("Error preparing temperature string!\n");
@@ -491,7 +497,7 @@ uint8_t create_response_object_temperature(char *buffer) {
 
 	memcpy(buffer, msgp1, size_msgp1);
 	// creates real data point and copies content to message buffer
-	size_datapoint = create_response_datapoint_temperature(buffer + size_msgp1, 1);
+	size_datapoint = create_response_datapoint_temperature(buffer + size_msgp1, 1,0);
 
 	memcpy(buffer + size_msgp1 + size_datapoint, msgp2, size_msgp2);
 
@@ -617,7 +623,7 @@ void value_handler(void* request, void* response, uint8_t *buffer,
 
 	REST.set_header_content_type(response, REST.type.APPLICATION_XML);
 
-	if ((size_msg = create_response_datapoint_temperature(message, 0)) <= 0) {
+	if ((size_msg = create_response_datapoint_temperature(message, 0,0)) <= 0) {
 		PRINTF("ERROR while creating message!\n");
 		REST.set_response_status(response,
 				REST.status.INTERNAL_SERVER_ERROR);
@@ -650,11 +656,11 @@ void value_periodic_handler(resource_t *r) {
 	}
 
 	if (strncmp(new_value, tempstring, TEMP_BUFF_MAX) != 0) {
-		if ((size_msg = create_response_datapoint_temperature(buffer, 0)) <= 0) {
+		if ((size_msg = create_response_datapoint_temperature(buffer, 0,1)) <= 0) {
 			PRINTF("ERROR while creating message!\n");
 			return;
 		}
-		printf("Notify subscribers\n");
+		printf("Notify group comm: %s\n", buffer);
 
 		/* Build notification. */
 		coap_packet_t notification[1]; /* This way the packet can be treated as pointer as usual. */
@@ -662,7 +668,7 @@ void value_periodic_handler(resource_t *r) {
 		coap_set_payload(notification, buffer, size_msg);
 
 		/* Notify the registered observers with the given message type, observe option, and payload. */
-		REST.notify_subscribers(r, obs_counter, notification);
+		//REST.notify_subscribers(r, obs_counter, notification);
 		#if GROUP_COMM_ENABLED
 		// check for registered group communication variables
 			send_group_update(buffer, size_msg, &temp_group_commhandler);
