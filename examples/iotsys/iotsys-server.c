@@ -44,12 +44,12 @@
 
 #include "erbium.h"
 
-#define RES_TEMP 0
+#define RES_TEMP 1
 #define RES_ACC 0
 #define RES_ACC_ACTIVE 0
 #define RES_ACC_FREEFALL 0
 #define RES_BUTTON 0
-#define RES_LEDS 1
+#define RES_LEDS 0
 #define RES_LEDS_OBSERVE 0
 
 #define EVENT_SENSITIVITY 1000
@@ -87,7 +87,7 @@
 #warning "IoTSyS server example"
 #endif /* CoAP-specific example */
 
-#define DEBUG 0
+#define DEBUG 1
 #if DEBUG
 #define PRINTF(...) printf(__VA_ARGS__)
 #define PRINT6ADDR(addr) PRINTF("[%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x]", ((uint8_t *)addr)[0], ((uint8_t *)addr)[1], ((uint8_t *)addr)[2], ((uint8_t *)addr)[3], ((uint8_t *)addr)[4], ((uint8_t *)addr)[5], ((uint8_t *)addr)[6], ((uint8_t *)addr)[7], ((uint8_t *)addr)[8], ((uint8_t *)addr)[9], ((uint8_t *)addr)[10], ((uint8_t *)addr)[11], ((uint8_t *)addr)[12], ((uint8_t *)addr)[13], ((uint8_t *)addr)[14], ((uint8_t *)addr)[15])
@@ -628,11 +628,7 @@ void value_handler(void* request, void* response, uint8_t *buffer,
 
 	send_message(message, size_msg, request, response, buffer, preferred_size,
 			offset);
-#if GROUP_COMM_ENABLED
-	// check for registered group communication variables
-	send_group_update(buffer, size_msg, &temp_group_commhandler);
 
-#endif
 }
 
 /*
